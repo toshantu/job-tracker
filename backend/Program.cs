@@ -1,4 +1,4 @@
-using JobTracker.Api.data;
+using JobTracker.Api.Data;
 using Microsoft.EntityFrameworkCore;
 
 
