@@ -1,8 +1,14 @@
+using JobTracker.Api.data;
+using Microsoft.EntityFrameworkCore;
+
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 var app = builder.Build();
 
@@ -32,6 +38,12 @@ app.MapGet("/weatherforecast", () =>
     return forecast;
 })
 .WithName("GetWeatherForecast");
+
+app.MapGet("/health/db", async (AppDbContext db) =>
+{
+    var canConnect = await db.Database.CanConnectAsync();
+    return canConnect ? Results.Ok(new { status = "connected" }) : Results.Problem("Cannot reach the database");
+});
 
 app.Run();
 
