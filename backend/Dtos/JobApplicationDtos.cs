@@ -46,3 +46,29 @@ public record JobApplicationUpdateRequest(
     DateOnly DateApplied,
     string? Notes
 );
+
+public record InterviewStageCreateRequest(
+    [Required, StringLength(200)] string StageName,
+    DateTimeOffset? ScheduledAt,
+    InterviewOutcome Outcome,
+    string? Notes
+);
+
+public record InterviewStageUpdateRequest(
+    [Required, StringLength(200)] string StageName,
+    DateTimeOffset? ScheduledAt,
+    InterviewOutcome Outcome,
+    string? Notes
+);
+
+public record ApplicationDocumentCreateRequest(
+    DocumentType Type,
+    [Required, StringLength(200)] string Label,
+    string? Notes
+);
+
+public record ApplicationDocumentUpdateRequest(
+    DocumentType Type,
+    [Required, StringLength(200)] string Label,
+    string? Notes
+);

@@ -53,6 +53,8 @@ app.MapGet("/weatherforecast", () =>
 .WithName("GetWeatherForecast");
 
 app.MapJobApplicationEndpoints();
+app.MapApplicationDocumentEndpoints();
+app.MapInterviewStageEndpoints();
 
 app.MapGet("/health/db", async (AppDbContext db) =>
 {

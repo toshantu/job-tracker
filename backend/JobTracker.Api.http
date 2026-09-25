@@ -71,3 +71,80 @@ Content-Type: application/json
 DELETE {{JobTracker.Api_HostAddress}}/job-applications/1
 
 ###
+
+# Interview Stages CRUD (nested under a job application)
+
+### Create an interview stage under job application 1
+POST {{JobTracker.Api_HostAddress}}/job-applications/1/interview-stages/
+Content-Type: application/json
+
+{
+  "stageName": "Phone Screen",
+  "scheduledAt": "2026-09-22T15:00:00Z",
+  "outcome": "Pending",
+  "notes": null
+}
+
+###
+
+### Update interview stage 1 under job application 1
+PUT {{JobTracker.Api_HostAddress}}/job-applications/1/interview-stages/1
+Content-Type: application/json
+
+{
+  "stageName": "Phone Screen",
+  "scheduledAt": "2026-09-22T15:00:00Z",
+  "outcome": "Passed",
+  "notes": "Went well"
+}
+
+###
+
+### Delete interview stage 1 under job application 1
+DELETE {{JobTracker.Api_HostAddress}}/job-applications/1/interview-stages/1
+
+###
+
+### Mismatched parent: update job application 1's stage 1 using job application 2's id (expect 404)
+PUT {{JobTracker.Api_HostAddress}}/job-applications/2/interview-stages/1
+Content-Type: application/json
+
+{
+  "stageName": "HIJACKED",
+  "scheduledAt": null,
+  "outcome": "Failed",
+  "notes": "should not apply"
+}
+
+###
+
+# Application Documents CRUD (nested under a job application)
+
+### Create a document under job application 1
+POST {{JobTracker.Api_HostAddress}}/job-applications/1/documents/
+Content-Type: application/json
+
+{
+  "type": "Cv",
+  "label": "Resume v3",
+  "notes": null
+}
+
+###
+
+### Update document 1 under job application 1
+PUT {{JobTracker.Api_HostAddress}}/job-applications/1/documents/1
+Content-Type: application/json
+
+{
+  "type": "CoverLetter",
+  "label": "Resume v4",
+  "notes": "Updated"
+}
+
+###
+
+### Delete document 1 under job application 1
+DELETE {{JobTracker.Api_HostAddress}}/job-applications/1/documents/1
+
+###
