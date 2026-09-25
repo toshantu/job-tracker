@@ -4,3 +4,70 @@ GET {{JobTracker.Api_HostAddress}}/weatherforecast/
 Accept: application/json
 
 ###
+
+# Job Applications CRUD
+
+### List all job applications
+GET {{JobTracker.Api_HostAddress}}/job-applications/
+Accept: application/json
+
+###
+
+### List job applications filtered by status
+GET {{JobTracker.Api_HostAddress}}/job-applications/?status=Interviewing
+Accept: application/json
+
+###
+
+### Get job application by id
+GET {{JobTracker.Api_HostAddress}}/job-applications/1
+Accept: application/json
+
+###
+
+### Create a job application
+POST {{JobTracker.Api_HostAddress}}/job-applications/
+Content-Type: application/json
+
+{
+  "company": "Acme Corp",
+  "roleTitle": "Backend Engineer",
+  "status": "Applied",
+  "dateApplied": "2026-09-20",
+  "notes": "Referred by a friend"
+}
+
+###
+
+### Create a job application with an empty Company (expect 400)
+POST {{JobTracker.Api_HostAddress}}/job-applications/
+Content-Type: application/json
+
+{
+  "company": "",
+  "roleTitle": "Backend Engineer",
+  "status": "Applied",
+  "dateApplied": "2026-09-20",
+  "notes": null
+}
+
+###
+
+### Update a job application
+PUT {{JobTracker.Api_HostAddress}}/job-applications/1
+Content-Type: application/json
+
+{
+  "company": "Acme Corp",
+  "roleTitle": "Senior Backend Engineer",
+  "status": "Interviewing",
+  "dateApplied": "2026-09-20",
+  "notes": "Moved to interviewing"
+}
+
+###
+
+### Delete a job application
+DELETE {{JobTracker.Api_HostAddress}}/job-applications/1
+
+###

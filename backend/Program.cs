@@ -1,4 +1,6 @@
 using JobTracker.Api.Data;
+using JobTracker.Api.Endpoints;
+using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
 
 
@@ -12,6 +14,12 @@ if (!string.IsNullOrEmpty(port))
 // Add services to the container.
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
+builder.Services.AddProblemDetails();
+builder.Services.AddValidation();
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
+});
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
@@ -43,6 +51,8 @@ app.MapGet("/weatherforecast", () =>
     return forecast;
 })
 .WithName("GetWeatherForecast");
+
+app.MapJobApplicationEndpoints();
 
 app.MapGet("/health/db", async (AppDbContext db) =>
 {
