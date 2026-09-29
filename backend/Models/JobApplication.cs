@@ -3,6 +3,8 @@ namespace JobTracker.Api.Models;
 public class JobApplication
 {
     public int Id { get; set; }
+    public int UserId { get; set; }
+    public User User { get; set; } = null!;
     public string Company { get; set; } = string.Empty;
     public string RoleTitle { get; set; } = string.Empty;
     public ApplicationStatus Status { get; set; }= ApplicationStatus.Wishlist;
