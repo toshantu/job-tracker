@@ -1,7 +1,12 @@
+using JobTracker.Api.Auth;
 using JobTracker.Api.Data;
 using JobTracker.Api.Endpoints;
 using System.Text.Json.Serialization;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Protocols;
+using Microsoft.IdentityModel.Protocols.OpenIdConnect;
+using Microsoft.Extensions.Options;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -23,6 +28,43 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
+builder.Services.AddOptions<GoogleAuthOptions>()
+    .Bind(builder.Configuration.GetSection("Authentication:Google"))
+    .Validate(o => !string.IsNullOrWhiteSpace(o.ClientId), "Authentication:Google:ClientId is missing")
+    .Validate(o => !string.IsNullOrWhiteSpace(o.ClientSecret), "Authentication:Google:ClientSecret is missing")
+    .ValidateOnStart();
+
+builder.Services.AddSingleton<IConfigurationManager<OpenIdConnectConfiguration>>(
+    new ConfigurationManager<OpenIdConnectConfiguration>(
+    "https://accounts.google.com/.well-known/openid-configuration",
+    new OpenIdConnectConfigurationRetriever(),
+    new HttpDocumentRetriever()));
+
+builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme).AddCookie(options =>
+{
+   options.Cookie.Name = "session";
+   options.Cookie.HttpOnly= true;
+   options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+   options.Cookie.SameSite = SameSiteMode.Lax;
+   options.ExpireTimeSpan = TimeSpan.FromDays(14);
+   options.SlidingExpiration = true;
+   options.Events = new CookieAuthenticationEvents
+   {
+       OnRedirectToLogin = context =>
+       {
+           context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+           return Task.CompletedTask;
+       },
+       OnRedirectToAccessDenied = context =>
+       {
+           context.Response.StatusCode = StatusCodes.Status403Forbidden;
+           return Task.CompletedTask;
+       }
+   };    
+});
+
+builder.Services.AddAuthorization();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -32,6 +74,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseAuthentication();
+app.UseAuthorization();
 
 var summaries = new[]
 {
@@ -60,6 +104,18 @@ app.MapGet("/health/db", async (AppDbContext db) =>
 {
     var canConnect = await db.Database.CanConnectAsync();
     return canConnect ? Results.Ok(new { status = "connected" }) : Results.Problem("Cannot reach the database");
+});
+
+app.MapGet("/auth/google/debug-config", async (IConfigurationManager<OpenIdConnectConfiguration> configManager) =>
+{
+  var config = await configManager.GetConfigurationAsync(CancellationToken.None);
+  return Results.Ok(new
+  {
+      issuer = config.Issuer,
+      authorizationEndpoint = config.AuthorizationEndpoint,
+      tokenEndpoint = config.TokenEndpoint,
+      signingKeyCount = config.SigningKeys.Count
+  });  
 });
 
 app.Run();
