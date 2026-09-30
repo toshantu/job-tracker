@@ -1,9 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using JobTracker.Api.Models;
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 
 namespace JobTracker.Api.Data;
 
-public class AppDbContext : DbContext
+public class AppDbContext : DbContext, IDataProtectionKeyContext
 {
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
     {
@@ -13,6 +14,7 @@ public class AppDbContext : DbContext
     public DbSet<JobApplication> JobApplications { get; set; } = null!;
     public DbSet<InterviewStage> InterviewStages { get; set; } = null!;
     public DbSet<ApplicationDocument> ApplicationDocuments { get; set; } = null!;
+    public DbSet<DataProtectionKey> DataProtectionKeys { get; set; } = null!;
 
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

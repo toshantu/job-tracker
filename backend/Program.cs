@@ -6,7 +6,8 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Protocols;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
-using Microsoft.Extensions.Options;
+using Microsoft.AspNetCore.DataProtection;
+
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -27,6 +28,8 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 });
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+builder.Services.AddDataProtection().PersistKeysToDbContext<AppDbContext>();
 
 builder.Services.AddOptions<GoogleAuthOptions>()
     .Bind(builder.Configuration.GetSection("Authentication:Google"))
@@ -116,6 +119,27 @@ app.MapGet("/auth/google/debug-config", async (IConfigurationManager<OpenIdConne
       tokenEndpoint = config.TokenEndpoint,
       signingKeyCount = config.SigningKeys.Count
   });  
+});
+
+app.MapGet("/auth/debug-protect", (IDataProtectionProvider dataProtectionProvider) =>
+{
+    var protector = dataProtectionProvider.CreateProtector("DebugTest");
+    var protectedValue = protector.Protect("hello-from-before-restart");
+    return Results.Ok(new {protectedValue });
+});
+
+app.MapGet("/auth/debug-unprotect", (string value, IDataProtectionProvider dataProtectionProvider) =>
+{
+    var protector = dataProtectionProvider.CreateProtector("DebugTest");
+    try
+    {
+        var unprotected = protector.Unprotect(value);
+        return Results.Ok(new { unprotected});
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem($"Failed to unprotect: {ex.Message}");
+    }
 });
 
 app.Run();
