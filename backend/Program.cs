@@ -29,6 +29,12 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
+builder.Services.AddOptions<AppOptions>()
+    .Bind(builder.Configuration)
+    .Validate(o => !string.IsNullOrWhiteSpace(o.PublicOrigin), "PublicOrigin is missing")
+    .Validate(o => Uri.TryCreate(o.PublicOrigin, UriKind.Absolute, out _), "PublicOrigin must be an absolute URL")
+    .ValidateOnStart();
+
 builder.Services.AddDataProtection().PersistKeysToDbContext<AppDbContext>();
 
 builder.Services.AddOptions<GoogleAuthOptions>()
@@ -102,44 +108,12 @@ app.MapGet("/weatherforecast", () =>
 app.MapJobApplicationEndpoints();
 app.MapApplicationDocumentEndpoints();
 app.MapInterviewStageEndpoints();
+app.MapAuthEndpoints();
 
 app.MapGet("/health/db", async (AppDbContext db) =>
 {
     var canConnect = await db.Database.CanConnectAsync();
     return canConnect ? Results.Ok(new { status = "connected" }) : Results.Problem("Cannot reach the database");
-});
-
-app.MapGet("/auth/google/debug-config", async (IConfigurationManager<OpenIdConnectConfiguration> configManager) =>
-{
-  var config = await configManager.GetConfigurationAsync(CancellationToken.None);
-  return Results.Ok(new
-  {
-      issuer = config.Issuer,
-      authorizationEndpoint = config.AuthorizationEndpoint,
-      tokenEndpoint = config.TokenEndpoint,
-      signingKeyCount = config.SigningKeys.Count
-  });  
-});
-
-app.MapGet("/auth/debug-protect", (IDataProtectionProvider dataProtectionProvider) =>
-{
-    var protector = dataProtectionProvider.CreateProtector("DebugTest");
-    var protectedValue = protector.Protect("hello-from-before-restart");
-    return Results.Ok(new {protectedValue });
-});
-
-app.MapGet("/auth/debug-unprotect", (string value, IDataProtectionProvider dataProtectionProvider) =>
-{
-    var protector = dataProtectionProvider.CreateProtector("DebugTest");
-    try
-    {
-        var unprotected = protector.Unprotect(value);
-        return Results.Ok(new { unprotected});
-    }
-    catch (Exception ex)
-    {
-        return Results.Problem($"Failed to unprotect: {ex.Message}");
-    }
 });
 
 app.Run();
