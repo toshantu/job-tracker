@@ -3,11 +3,10 @@ using JobTracker.Api.Data;
 using JobTracker.Api.Endpoints;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Protocols;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
-using Microsoft.AspNetCore.DataProtection;
-
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -42,6 +41,8 @@ builder.Services.AddOptions<GoogleAuthOptions>()
     .Validate(o => !string.IsNullOrWhiteSpace(o.ClientId), "Authentication:Google:ClientId is missing")
     .Validate(o => !string.IsNullOrWhiteSpace(o.ClientSecret), "Authentication:Google:ClientSecret is missing")
     .ValidateOnStart();
+
+builder.Services.AddHttpClient("Google");
 
 builder.Services.AddSingleton<IConfigurationManager<OpenIdConnectConfiguration>>(
     new ConfigurationManager<OpenIdConnectConfiguration>(
