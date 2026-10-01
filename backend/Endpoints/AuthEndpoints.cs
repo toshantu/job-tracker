@@ -211,5 +211,11 @@ public static class AuthEndpoints
             });
         })
         .RequireAuthorization();
+
+        app.MapPost("/auth/logout", async (HttpContext httpContext) =>
+        {
+            await httpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            return Results.Ok();
+        });
     }
 }
