@@ -1,3 +1,5 @@
+using System.Security.Claims;
+using JobTracker.Api.Auth;
 using JobTracker.Api.Data;
 using JobTracker.Api.Dtos;
 using JobTracker.Api.Models;
@@ -9,12 +11,14 @@ public static class InterviewStageEndpoints
 {
     public static void MapInterviewStageEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/job-applications/{jobApplicationId:int}/interview-stages");
+        var group = app.MapGroup("/job-applications/{jobApplicationId:int}/interview-stages").RequireAuthorization();
 
-        group.MapPost("/", async (int jobApplicationId, InterviewStageCreateRequest request, AppDbContext db) =>
+        group.MapPost("/", async (int jobApplicationId, InterviewStageCreateRequest request, ClaimsPrincipal user, AppDbContext db) =>
         {
-            var jobApplication = await db.JobApplications.AnyAsync(j => j.Id == jobApplicationId);
-            if (!jobApplication)
+            var userId = user.GetUserId();
+
+            var ownsParent = await db.JobApplications.AnyAsync(j => j.Id == jobApplicationId && j.UserId == userId);
+            if (!ownsParent)
             {
                 return Results.NotFound();
             }
@@ -35,9 +39,14 @@ public static class InterviewStageEndpoints
             return Results.Created($"/job-applications/{jobApplicationId}/interview-stages/{entity.Id}", response);
         });
 
-        group.MapPut("/{stageId:int}", async (int jobApplicationId, int stageId, InterviewStageUpdateRequest request, AppDbContext db) =>
+        group.MapPut("/{stageId:int}", async (int jobApplicationId, int stageId, InterviewStageUpdateRequest request, ClaimsPrincipal user, AppDbContext db) =>
         {
-            var entity = await db.InterviewStages.FirstOrDefaultAsync(s => s.Id == stageId && s.JobApplicationId == jobApplicationId);
+            var userId = user.GetUserId();
+
+            var entity = await db.InterviewStages.FirstOrDefaultAsync(s =>
+                s.Id == stageId
+                && s.JobApplicationId == jobApplicationId
+                && s.JobApplication.UserId == userId);
 
             if (entity is null)
             {
@@ -55,9 +64,14 @@ public static class InterviewStageEndpoints
             return Results.Ok(response);
         });
 
-        group.MapDelete("/{stageId:int}", async (int jobApplicationId, int stageId, AppDbContext db) =>
+        group.MapDelete("/{stageId:int}", async (int jobApplicationId, int stageId, ClaimsPrincipal user, AppDbContext db) =>
         {
-            var entity = await db.InterviewStages.FirstOrDefaultAsync(s => s.Id == stageId && s.JobApplicationId == jobApplicationId);
+            var userId = user.GetUserId();
+
+            var entity = await db.InterviewStages.FirstOrDefaultAsync(s =>
+                s.Id == stageId
+                && s.JobApplicationId == jobApplicationId
+                && s.JobApplication.UserId == userId);
 
             if (entity is null)
             {

@@ -1,3 +1,5 @@
+using System.Security.Claims;
+using JobTracker.Api.Auth;
 using JobTracker.Api.Data;
 using JobTracker.Api.Dtos;
 using JobTracker.Api.Models;
@@ -9,13 +11,17 @@ public static class JobApplicationEndpoints
 {
     public static void MapJobApplicationEndpoints(this WebApplication app)
     {
-        var group = app.MapGroup("/job-applications");
+        var group = app.MapGroup("/job-applications").RequireAuthorization();
 
-        group.MapGet("/", async (AppDbContext db, ApplicationStatus? status) =>
+        group.MapGet("/", async (ClaimsPrincipal user, AppDbContext db, ApplicationStatus? status) =>
         {
+            var userId = user.GetUserId();
+
             IQueryable<JobApplication> query = db.JobApplications
+                .Where(j => j.UserId == userId)
                 .Include(j => j.InterviewStages)
-                .Include(j => j.Documents);
+                .Include(j => j.Documents)
+                .AsSplitQuery();
 
             if (status is not null)
             {
@@ -24,26 +30,30 @@ public static class JobApplicationEndpoints
 
             var results = await query
                 .OrderByDescending(j => j.DateApplied)
-                .Select(j => ToResponse(j))
+                .ThenByDescending(j => j.Id)
                 .ToListAsync();
-            
-            return Results.Ok(results);            
+
+            return Results.Ok(results.Select(j => ToResponse(j)).ToList());
         });
 
-        group.MapGet("/{id:int}", async (int id, AppDbContext db) =>
+        group.MapGet("/{id:int}", async (int id, ClaimsPrincipal user, AppDbContext db) =>
         {
+            var userId = user.GetUserId();
+
             var entity = await db.JobApplications
                 .Include(j => j.InterviewStages)
                 .Include(j => j.Documents)
-                .FirstOrDefaultAsync(j => j.Id == id);
+                .AsSplitQuery()
+                .FirstOrDefaultAsync(j => j.Id == id && j.UserId == userId);
 
             return entity is null ? Results.NotFound() : Results.Ok(ToResponse(entity));
         });
 
-        group.MapPost("/", async (JobApplicationCreateRequest request, AppDbContext db) =>
+        group.MapPost("/", async (JobApplicationCreateRequest request, ClaimsPrincipal user, AppDbContext db) =>
         {
             var entity = new JobApplication
             {
+                UserId = user.GetUserId(),
                 Company = request.Company,
                 RoleTitle = request.RoleTitle,
                 Status = request.Status,
@@ -57,12 +67,15 @@ public static class JobApplicationEndpoints
             return Results.Created($"/job-applications/{entity.Id}", ToResponse(entity));
         });
 
-        group.MapPut("/{id:int}", async (int id, JobApplicationUpdateRequest request, AppDbContext db) =>
+        group.MapPut("/{id:int}", async (int id, JobApplicationUpdateRequest request, ClaimsPrincipal user, AppDbContext db) =>
         {
+            var userId = user.GetUserId();
+
             var entity = await db.JobApplications
                 .Include(j => j.InterviewStages)
                 .Include(j => j.Documents)
-                .FirstOrDefaultAsync(j => j.Id == id);  
+                .AsSplitQuery()
+                .FirstOrDefaultAsync(j => j.Id == id && j.UserId == userId);
 
             if (entity is null)
             {
@@ -81,9 +94,11 @@ public static class JobApplicationEndpoints
             return Results.Ok(ToResponse(entity));
         });
 
-        group.MapDelete("/{id:int}", async (int id, AppDbContext db) =>
+        group.MapDelete("/{id:int}", async (int id, ClaimsPrincipal user, AppDbContext db) =>
         {
-            var entity = await db.JobApplications.FindAsync(id);
+            var userId = user.GetUserId();
+
+            var entity = await db.JobApplications.FirstOrDefaultAsync(j => j.Id == id && j.UserId == userId);
 
             if (entity is null)
             {
@@ -95,7 +110,6 @@ public static class JobApplicationEndpoints
 
             return Results.NoContent();
         });
-        
     }
 
     private static JobApplicationResponse ToResponse(JobApplication j) => new(
@@ -103,5 +117,4 @@ public static class JobApplicationEndpoints
         j.InterviewStages.Select(s => new InterviewStageResponse(s.Id, s.StageName, s.ScheduledAt, s.Outcome, s.Notes)).ToList(),
         j.Documents.Select(d => new ApplicationDocumentResponse(d.Id, d.Type, d.Label, d.Notes)).ToList()
     );
-    
 }
