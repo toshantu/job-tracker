@@ -22,6 +22,9 @@ public static class AuthEndpoints
 {
     private const string GoogleCorrelationCookieName = "google_oauth_correlation";
     private const string GoogleDataProtectionPurpose = "GoogleOAuthCorrelation";
+    private const string GitHubCorrelationCookieName = "github_oauth_correlation";
+    private const string GitHubDataProtectionPurpose = "GitHubOAuthCorrelation";
+    private const string GitHubAuthorizeEndpoint = "https://github.com/login/oauth/authorize";
 
     private record GoogleTokenResponse(
         [property: JsonPropertyName("id_token")] string? IdToken
@@ -68,6 +71,44 @@ public static class AuthEndpoints
                 ["code_challenge"] = codeChallenge,
                 ["code_challenge_method"] = "S256",
                 ["prompt"] = "select_account",
+            });
+
+            return Results.Redirect(authorizeUrl);
+        });
+
+        app.MapGet("/auth/github/login", (
+            HttpContext httpContext,
+            IOptions<AppOptions> appOptions,
+            IOptions<GitHubAuthOptions> gitHubOptions,
+            IDataProtectionProvider dataProtectionProvider) =>
+        {
+            var codeVerifier = PkceHelper.GenerateCodeVerifier();
+            var codeChallenge = PkceHelper.ComputeCodeChallenge(codeVerifier);
+            var state = PkceHelper.GenerateRandomToken();
+
+            var correlationData = new GitHubOAuthCorrelationData(codeVerifier, state);
+            var protector = dataProtectionProvider.CreateProtector(GitHubDataProtectionPurpose);
+            var protectedPayload = protector.Protect(JsonSerializer.Serialize(correlationData));
+
+            httpContext.Response.Cookies.Append(GitHubCorrelationCookieName, protectedPayload, new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = true,
+                SameSite = SameSiteMode.Lax,
+                Expires = DateTimeOffset.UtcNow.AddMinutes(10),
+                IsEssential = true
+            });
+
+            var redirectUri = $"{appOptions.Value.PublicOrigin}/api/auth/github/callback";
+
+            var authorizeUrl = QueryHelpers.AddQueryString(GitHubAuthorizeEndpoint, new Dictionary<string, string?>
+            {
+                ["client_id"] = gitHubOptions.Value.ClientId,
+                ["redirect_uri"] = redirectUri,
+                ["scope"] = "read:user user:email",
+                ["state"] = state,
+                ["code_challenge"] = codeChallenge,
+                ["code_challenge_method"] = "S256",
             });
 
             return Results.Redirect(authorizeUrl);

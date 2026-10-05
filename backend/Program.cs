@@ -42,6 +42,12 @@ builder.Services.AddOptions<GoogleAuthOptions>()
     .Validate(o => !string.IsNullOrWhiteSpace(o.ClientSecret), "Authentication:Google:ClientSecret is missing")
     .ValidateOnStart();
 
+builder.Services.AddOptions<GitHubAuthOptions>()
+    .Bind(builder.Configuration.GetSection("Authentication:GitHub"))
+    .Validate(o => !string.IsNullOrWhiteSpace(o.ClientId), "Authentication:GitHub:ClientId is missing")
+    .Validate(o => !string.IsNullOrWhiteSpace(o.ClientSecret), "Authentication:GitHub:ClientSecret is missing")
+    .ValidateOnStart();
+
 builder.Services.AddHttpClient("Google");
 
 builder.Services.AddSingleton<IConfigurationManager<OpenIdConnectConfiguration>>(
