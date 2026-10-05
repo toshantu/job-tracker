@@ -50,6 +50,11 @@ builder.Services.AddOptions<GitHubAuthOptions>()
 
 builder.Services.AddHttpClient("Google");
 
+builder.Services.AddHttpClient("GitHub", client =>
+{
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("JobTracker");
+});
+
 builder.Services.AddSingleton<IConfigurationManager<OpenIdConnectConfiguration>>(
     new ConfigurationManager<OpenIdConnectConfiguration>(
     "https://accounts.google.com/.well-known/openid-configuration",

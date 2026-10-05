@@ -1,3 +1,4 @@
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text.Json;
@@ -25,9 +26,25 @@ public static class AuthEndpoints
     private const string GitHubCorrelationCookieName = "github_oauth_correlation";
     private const string GitHubDataProtectionPurpose = "GitHubOAuthCorrelation";
     private const string GitHubAuthorizeEndpoint = "https://github.com/login/oauth/authorize";
+    private const string GitHubTokenEndpoint = "https://github.com/login/oauth/access_token";
+    private const string GitHubUserEndpoint = "https://api.github.com/user";
+
 
     private record GoogleTokenResponse(
         [property: JsonPropertyName("id_token")] string? IdToken
+    );
+
+    private record GitHubTokenResponse(
+        [property: JsonPropertyName("access_token")] string? AccessToken,
+        [property: JsonPropertyName("error")] string? Error,
+        [property: JsonPropertyName("error_description")] string? ErrorDescription
+    );
+
+    private record GitHubUserResponse(
+        [property: JsonPropertyName("id")] long Id,
+        [property: JsonPropertyName("login")] string? Login,
+        [property: JsonPropertyName("name")] string? Name,
+        [property: JsonPropertyName("email")] string? Email
     );
 
     public static void MapAuthEndpoints(this WebApplication app)
@@ -75,45 +92,7 @@ public static class AuthEndpoints
 
             return Results.Redirect(authorizeUrl);
         });
-
-        app.MapGet("/auth/github/login", (
-            HttpContext httpContext,
-            IOptions<AppOptions> appOptions,
-            IOptions<GitHubAuthOptions> gitHubOptions,
-            IDataProtectionProvider dataProtectionProvider) =>
-        {
-            var codeVerifier = PkceHelper.GenerateCodeVerifier();
-            var codeChallenge = PkceHelper.ComputeCodeChallenge(codeVerifier);
-            var state = PkceHelper.GenerateRandomToken();
-
-            var correlationData = new GitHubOAuthCorrelationData(codeVerifier, state);
-            var protector = dataProtectionProvider.CreateProtector(GitHubDataProtectionPurpose);
-            var protectedPayload = protector.Protect(JsonSerializer.Serialize(correlationData));
-
-            httpContext.Response.Cookies.Append(GitHubCorrelationCookieName, protectedPayload, new CookieOptions
-            {
-                HttpOnly = true,
-                Secure = true,
-                SameSite = SameSiteMode.Lax,
-                Expires = DateTimeOffset.UtcNow.AddMinutes(10),
-                IsEssential = true
-            });
-
-            var redirectUri = $"{appOptions.Value.PublicOrigin}/api/auth/github/callback";
-
-            var authorizeUrl = QueryHelpers.AddQueryString(GitHubAuthorizeEndpoint, new Dictionary<string, string?>
-            {
-                ["client_id"] = gitHubOptions.Value.ClientId,
-                ["redirect_uri"] = redirectUri,
-                ["scope"] = "read:user user:email",
-                ["state"] = state,
-                ["code_challenge"] = codeChallenge,
-                ["code_challenge_method"] = "S256",
-            });
-
-            return Results.Redirect(authorizeUrl);
-        });
-
+  
         app.MapGet("/auth/google/callback", async (
             HttpContext httpContext,
             HttpRequest request,
@@ -235,6 +214,163 @@ public static class AuthEndpoints
             var claims = new List<Claim> { new System.Security.Claims.Claim(ClaimTypes.NameIdentifier, user.Id.ToString()) };
             if (email is not null) claims.Add(new System.Security.Claims.Claim(ClaimTypes.Email, email));
             if (displayName is not null) claims.Add(new System.Security.Claims.Claim(ClaimTypes.Name, displayName));
+
+            var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
+            await httpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(identity));
+
+            return Results.Redirect(appOptions.Value.PublicOrigin);
+        });
+
+         app.MapGet("/auth/github/login", (
+            HttpContext httpContext,
+            IOptions<AppOptions> appOptions,
+            IOptions<GitHubAuthOptions> gitHubOptions,
+            IDataProtectionProvider dataProtectionProvider) =>
+        {
+            var codeVerifier = PkceHelper.GenerateCodeVerifier();
+            var codeChallenge = PkceHelper.ComputeCodeChallenge(codeVerifier);
+            var state = PkceHelper.GenerateRandomToken();
+
+            var correlationData = new GitHubOAuthCorrelationData(codeVerifier, state);
+            var protector = dataProtectionProvider.CreateProtector(GitHubDataProtectionPurpose);
+            var protectedPayload = protector.Protect(JsonSerializer.Serialize(correlationData));
+
+            httpContext.Response.Cookies.Append(GitHubCorrelationCookieName, protectedPayload, new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = true,
+                SameSite = SameSiteMode.Lax,
+                Expires = DateTimeOffset.UtcNow.AddMinutes(10),
+                IsEssential = true
+            });
+
+            var redirectUri = $"{appOptions.Value.PublicOrigin}/api/auth/github/callback";
+
+            var authorizeUrl = QueryHelpers.AddQueryString(GitHubAuthorizeEndpoint, new Dictionary<string, string?>
+            {
+                ["client_id"] = gitHubOptions.Value.ClientId,
+                ["redirect_uri"] = redirectUri,
+                ["state"] = state,
+                ["code_challenge"] = codeChallenge,
+                ["code_challenge_method"] = "S256",
+            });
+
+            return Results.Redirect(authorizeUrl);
+        });
+
+        app.MapGet("/auth/github/callback", async (
+            HttpContext httpContext,
+            HttpRequest request,
+            IOptions<AppOptions> appOptions,
+            IOptions<GitHubAuthOptions> githubOptions,
+            IDataProtectionProvider dataProtectionProvider,
+            IHttpClientFactory httpClientFactory,
+            AppDbContext db) =>
+        {
+            // 1. Correlation cookie must exist and must unprotect cleanly. Single-use: delete immediately.
+            if (!request.Cookies.TryGetValue(GitHubCorrelationCookieName, out var protectedCorrelation))
+            {
+                return Results.Problem("Missing login session. Start the flow again at /auth/github/login.", statusCode: StatusCodes.Status400BadRequest);
+            }
+            httpContext.Response.Cookies.Delete(GitHubCorrelationCookieName);
+
+            GitHubOAuthCorrelationData correlation;
+            try
+            {
+                var protector = dataProtectionProvider.CreateProtector(GitHubDataProtectionPurpose);
+                var json = protector.Unprotect(protectedCorrelation);
+                correlation = JsonSerializer.Deserialize<GitHubOAuthCorrelationData>(json)
+                    ?? throw new InvalidOperationException("Empty correlation payload.");
+            }
+            catch
+            {
+                return Results.Problem("Login session could not be verified. Start the flow again.", statusCode: StatusCodes.Status400BadRequest);
+            }
+
+            // 2. state must match before anything else in the query string is trusted.
+            var returnedState = request.Query["state"].ToString();
+            if (string.IsNullOrEmpty(returnedState) || returnedState != correlation.State)
+            {
+                return Results.Problem("State mismatch.", statusCode: StatusCodes.Status400BadRequest);
+            }
+
+            // 3. Now safe to check whether GitHub reported an error (e.g. access denied).
+            if (request.Query.TryGetValue("error", out var errorValue))
+            {
+                return Results.Problem($"GitHub returned an error: {errorValue}", statusCode: StatusCodes.Status400BadRequest);
+            }
+
+            var code = request.Query["code"].ToString();
+            if (string.IsNullOrEmpty(code))
+            {
+                return Results.Problem("Missing authorization code.", statusCode: StatusCodes.Status400BadRequest);
+            }
+
+            var redirectUri = $"{appOptions.Value.PublicOrigin}/api/auth/github/callback";
+            var httpClient = httpClientFactory.CreateClient("GitHub");
+
+            // 4. Exchange the code for an access token, proving possession via the PKCE verifier.
+            using var tokenRequest = new HttpRequestMessage(HttpMethod.Post, GitHubTokenEndpoint)
+            {
+                Content = new FormUrlEncodedContent(new Dictionary<string, string>
+                {
+                    ["client_id"] = githubOptions.Value.ClientId,
+                    ["client_secret"] = githubOptions.Value.ClientSecret,
+                    ["code"] = code,
+                    ["redirect_uri"] = redirectUri,
+                    ["code_verifier"] = correlation.CodeVerifier,
+                })
+            };
+            tokenRequest.Headers.Accept.ParseAdd("application/json");
+
+            using var tokenResponse = await httpClient.SendAsync(tokenRequest);
+            if (!tokenResponse.IsSuccessStatusCode)
+            {
+                return Results.Problem($"GitHub token exchange failed with HTTP {(int)tokenResponse.StatusCode}.", statusCode: StatusCodes.Status400BadRequest);
+            }
+
+            var tokenData = await tokenResponse.Content.ReadFromJsonAsync<GitHubTokenResponse>();
+            if (tokenData is null || !string.IsNullOrEmpty(tokenData.Error) || string.IsNullOrEmpty(tokenData.AccessToken))
+            {
+                return Results.Problem($"GitHub token exchange failed: {tokenData?.Error} {tokenData?.ErrorDescription}".Trim(), statusCode: StatusCodes.Status400BadRequest);
+            }
+
+            // 5. Identity comes from GitHub's own API: there is no id_token to validate.
+            using var userRequest = new HttpRequestMessage(HttpMethod.Get, GitHubUserEndpoint);
+            userRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", tokenData.AccessToken);
+            userRequest.Headers.Accept.ParseAdd("application/vnd.github+json");
+            userRequest.Headers.Add("X-GitHub-Api-Version", "2022-11-28");
+
+            using var userResponse = await httpClient.SendAsync(userRequest);
+            if (!userResponse.IsSuccessStatusCode)
+            {
+                return Results.Problem($"GitHub user lookup failed with HTTP {(int)userResponse.StatusCode}.", statusCode: StatusCodes.Status502BadGateway);
+            }
+
+            var githubUser = await userResponse.Content.ReadFromJsonAsync<GitHubUserResponse>();
+            if (githubUser is null || githubUser.Id <= 0)
+            {
+                return Results.Problem("GitHub user response did not include an id.", statusCode: StatusCodes.Status502BadGateway);
+            }
+
+            // 6. Upsert the User, keyed on (Provider, ProviderSubject) — the numeric id, never the username.
+            var providerSubject = githubUser.Id.ToString();
+            var displayName = !string.IsNullOrWhiteSpace(githubUser.Name) ? githubUser.Name : githubUser.Login;
+
+            var user = await db.Users.FirstOrDefaultAsync(u => u.Provider == AuthProvider.GitHub && u.ProviderSubject == providerSubject);
+            if (user is null)
+            {
+                user = new User { Provider = AuthProvider.GitHub, ProviderSubject = providerSubject };
+                db.Users.Add(user);
+            }
+            if (githubUser.Email is not null) user.Email = githubUser.Email;
+            user.DisplayName = displayName;
+            await db.SaveChangesAsync();
+
+            // 7. Issue the session. GitHub's token is discarded here — never stored.
+            var claims = new List<Claim> { new System.Security.Claims.Claim(ClaimTypes.NameIdentifier, user.Id.ToString()) };
+            if (user.Email is not null) claims.Add(new System.Security.Claims.Claim(ClaimTypes.Email, user.Email));
+            if (user.DisplayName is not null) claims.Add(new System.Security.Claims.Claim(ClaimTypes.Name, user.DisplayName));
 
             var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
             await httpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(identity));
