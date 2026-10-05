@@ -385,6 +385,7 @@ public static class AuthEndpoints
                 userId = user.FindFirstValue(ClaimTypes.NameIdentifier),
                 email = user.FindFirstValue(ClaimTypes.Email),
                 displayName = user.FindFirstValue(ClaimTypes.Name),
+                isAdmin = user.IsInRole(AppRoles.Admin),
             });
         })
         .RequireAuthorization();

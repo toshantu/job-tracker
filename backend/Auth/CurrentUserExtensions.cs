@@ -10,6 +10,6 @@ public static class CurrentUserExtensions
 
         return int.TryParse(value, out var id)
             ? id
-            : throw new InvalidOperationException("Authenticated principal has no valied user id claim.");
+            : throw new InvalidOperationException("Authenticated principal has no valid user id claim.");
     }
 } 
