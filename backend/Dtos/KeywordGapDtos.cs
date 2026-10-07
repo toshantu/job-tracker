@@ -6,6 +6,18 @@ public enum KeywordImportance
     Preferred
 }
 
+// What the browser sends. Unknown properties are ignored, so a user id in the body is never read.
+public sealed record KeywordGapRequest(string? JobDescription, string? CvText);
+
+// What the browser gets back when something goes wrong. Code is the stable part: the UI keys on it.
+// Message is a short fixed sentence of ours and never contains provider text.
+public sealed record KeywordGapError(
+    string Code,
+    string Message,
+    int? RetryAfterSeconds = null,
+    string? Field = null,
+    int? MaxLength = null);
+
 public sealed record KeywordResult(string Keyword, KeywordImportance Importance, bool InCv);
 
 public sealed record KeywordGapGroupSummary(int Total, int Matched, int? Percent);

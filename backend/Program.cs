@@ -81,6 +81,8 @@ builder.Services.AddHttpClient("Groq", (serviceProvider, client) =>
     client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", options.ApiKey);   
 });
 
+builder.Services.AddKeywordGap(builder.Configuration);
+
 builder.Services.AddSingleton<IConfigurationManager<OpenIdConnectConfiguration>>(
     new ConfigurationManager<OpenIdConnectConfiguration>(
         "https://accounts.google.com/.well-known/openid-configuration",
@@ -130,6 +132,7 @@ app.MapApplicationDocumentEndpoints();
 app.MapInterviewStageEndpoints();
 app.MapAuthEndpoints();
 app.MapAdminEndpoints();
+app.MapKeywordGapEndpoints();
 
 app.MapGet("/health/db", async (AppDbContext db) =>
 {
