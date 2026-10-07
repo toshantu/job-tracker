@@ -9,17 +9,17 @@ function resolveBackendOrigin(): string {
     throw new Error("BACKEND_ORIGIN is not set, put it in frontend/.env.local; on Vercel, add it to the project settings > Environment Variables.");
   }
 
-let url: URL;
-try {
-  url = new URL(raw);
-} catch {
-  throw new Error(`BACKEND_ORIGIN is not a valid URL: ${raw}`);
-}
-if (url.protocol !== "http:" && url.protocol !== "https:") {
-  throw new Error(`BACKEND_ORIGIN must be an http or https URL, got: ${raw}`);
-}
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new Error(`BACKEND_ORIGIN is not a valid URL: ${raw}`);
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new Error(`BACKEND_ORIGIN must be an http or https URL, got: ${raw}`);
+  }
 
-return url.origin; //also drops any trailing slash
+  return url.origin; //also drops any trailing slash
 }
 
 const backendOrigin = resolveBackendOrigin();
