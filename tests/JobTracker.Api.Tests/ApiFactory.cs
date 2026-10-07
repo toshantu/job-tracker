@@ -17,11 +17,15 @@ public sealed class ApiFactory : WebApplicationFactory<GroqOptions>
 
     private readonly string? _overrideKey;
     private readonly string? _overrideValue;
+    private readonly bool _useRealGroq;
 
-    public ApiFactory(string? overrideKey = null, string? overrideValue = null)
+    // useRealGroq leaves the Groq client untouched so calls go to the real API. Only the live
+    // tests use it, and they pass the real key in through overrideKey and overrideValue.
+    public ApiFactory(string? overrideKey = null, string? overrideValue = null, bool useRealGroq = false)
     {
         _overrideKey = overrideKey;
         _overrideValue = overrideValue;
+        _useRealGroq = useRealGroq;
     }
 
     public StubHttpMessageHandler GroqStub { get; } = new();
@@ -50,7 +54,10 @@ public sealed class ApiFactory : WebApplicationFactory<GroqOptions>
 
         builder.ConfigureTestServices(services =>
         {
-            services.AddHttpClient("Groq").ConfigurePrimaryHttpMessageHandler(() => GroqStub);
+            if (!_useRealGroq)
+            {
+                services.AddHttpClient("Groq").ConfigurePrimaryHttpMessageHandler(() => GroqStub);
+            }
 
             // Keep Data Protection keys out of the database.
             services.AddDataProtection()
