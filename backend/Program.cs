@@ -1,3 +1,4 @@
+using JobTracker.Api.Ai;
 using JobTracker.Api.Auth;
 using JobTracker.Api.Data;
 using JobTracker.Api.Endpoints;
@@ -6,6 +7,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Protocols;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 
@@ -53,11 +55,30 @@ builder.Services.AddOptions<AdminOptions>()
     .Validate(o => o.AdminUserIds.All(id => id > 0), "Authorization:AdminUserIds must contain only positive user ids")
     .ValidateOnStart();
 
+builder.Services.AddOptions<GroqOptions>()
+    .Bind(builder.Configuration.GetSection("Ai:Groq"))
+    .Validate(o => !string.IsNullOrWhiteSpace(o.ApiKey), "Ai:Groq:ApiKey is missing")
+    .Validate(o => Uri.TryCreate(o.BaseUrl, UriKind.Absolute, out var baseUri)&& baseUri.Scheme == Uri.UriSchemeHttps, "Ai:Groq:BaseUrl must be an absolute https URL")
+    .Validate(o => o.BaseUrl.EndsWith("/"), "Ai:Groq:BaseUrl must end with a trailing slash")
+    .Validate(o => !string.IsNullOrWhiteSpace(o.Model), "Ai:Groq:Model is missing")
+    .Validate(o => o.ReasoningEffort is "none" or "low" or "medium" or "high", "Ai:Groq:ReasoningEffort must be one of 'none', 'low', 'medium', or 'high'")
+    .Validate(o => o.MaxCompletionTokens is >= 256 and <=4000, "Ai:Groq:MaxCompletionTokens must be between 256 and 4000")
+    .Validate(o => o.TimeoutSeconds is >= 5 and <= 60, "Ai:Groq:TimeoutSeconds must be between 5 and 60")
+    .ValidateOnStart();
+
 builder.Services.AddHttpClient("Google");
 
 builder.Services.AddHttpClient("GitHub", client =>
 {
     client.DefaultRequestHeaders.UserAgent.ParseAdd("JobTracker");
+});
+
+builder.Services.AddHttpClient("Groq", (serviceProvider, client) =>
+{
+    var options = serviceProvider.GetRequiredService<IOptions<GroqOptions>>().Value;
+    client.BaseAddress = new Uri(options.BaseUrl);
+    client.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds + 10);
+    client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", options.ApiKey);   
 });
 
 builder.Services.AddSingleton<IConfigurationManager<OpenIdConnectConfiguration>>(
