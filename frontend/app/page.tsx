@@ -9,6 +9,7 @@ import {
   type CurrentUser,
   type JobApplication,
 } from "@/lib/api";
+import { KeywordGapAnalyzer } from "./keyword-gap-analyzer";
 
 type AuthState =
   | { kind: "loading" }
@@ -214,6 +215,8 @@ function SignedInView({ user, onSignedOut }: { user: CurrentUser; onSignedOut: (
           </ul>
         )}
       </section>
+
+      <KeywordGapAnalyzer onSignedOut={onSignedOut} />
     </div>
   );
 }
