@@ -10,7 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "next": "16.3.5",
+    "next": "16.4.0",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
@@ -23,11 +23,15 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.3.5",
+    "eslint-config-next": "16.4.0",
     "jsdom": "^26.1.0",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vite": "^6.4.4",
-    "vitest": "^3.2.7"
+    "vitest": "^4.1.11"
+  },
+  "allowScripts": {
+    "esbuild@0.25.12": true,
+    "unrs-resolver@1.12.2": true
   }
 }
