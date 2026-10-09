@@ -12,4 +12,4 @@ public static class CurrentUserExtensions
             ? id
             : throw new InvalidOperationException("Authenticated principal has no valid user id claim.");
     }
-} 
+}

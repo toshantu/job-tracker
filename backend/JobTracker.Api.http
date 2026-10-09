@@ -1,32 +1,42 @@
+# Requests for the API running locally (dotnet run, port 5073).
+#
+# Every route except /health/db needs a signed-in session:
+#   1. Sign in through the app at http://localhost:3000 (GitHub or Google).
+#   2. In the browser's DevTools, Application tab, Cookies, copy the value of the "session" cookie.
+#   3. Paste it over the placeholder below while you test. Never commit a real value.
+#
+# Another user's rows answer 404, not 403. /admin/stats answers 403 to non-admins.
+# Enums are sent as strings. DateApplied is a plain date. ScheduledAt is a date and time with an offset.
+
 @JobTracker.Api_HostAddress = http://localhost:5073
+@session = <paste-session-cookie>
 
-GET {{JobTracker.Api_HostAddress}}/weatherforecast/
-Accept: application/json
+### Who am I (401 when the cookie is missing or expired)
+GET {{JobTracker.Api_HostAddress}}/auth/me
+Cookie: session={{session}}
 
-###
+### Sign out
+POST {{JobTracker.Api_HostAddress}}/auth/logout
+Cookie: session={{session}}
 
-# Job Applications CRUD
-
-### List all job applications
+### List your applications
 GET {{JobTracker.Api_HostAddress}}/job-applications/
+Cookie: session={{session}}
 Accept: application/json
 
-###
-
-### List job applications filtered by status
+### List your applications filtered by status
 GET {{JobTracker.Api_HostAddress}}/job-applications/?status=Interviewing
+Cookie: session={{session}}
 Accept: application/json
 
-###
-
-### Get job application by id
+### Get one application (use an id from the list)
 GET {{JobTracker.Api_HostAddress}}/job-applications/1
+Cookie: session={{session}}
 Accept: application/json
 
-###
-
-### Create a job application
+### Create an application
 POST {{JobTracker.Api_HostAddress}}/job-applications/
+Cookie: session={{session}}
 Content-Type: application/json
 
 {
@@ -37,10 +47,9 @@ Content-Type: application/json
   "notes": "Referred by a friend"
 }
 
-###
-
-### Create a job application with an empty Company (expect 400)
+### Create an application with an empty Company (expect 400)
 POST {{JobTracker.Api_HostAddress}}/job-applications/
+Cookie: session={{session}}
 Content-Type: application/json
 
 {
@@ -51,10 +60,9 @@ Content-Type: application/json
   "notes": null
 }
 
-###
-
-### Update a job application
+### Update an application
 PUT {{JobTracker.Api_HostAddress}}/job-applications/1
+Cookie: session={{session}}
 Content-Type: application/json
 
 {
@@ -65,17 +73,13 @@ Content-Type: application/json
   "notes": "Moved to interviewing"
 }
 
-###
-
-### Delete a job application
+### Delete an application (its stages and documents go with it)
 DELETE {{JobTracker.Api_HostAddress}}/job-applications/1
+Cookie: session={{session}}
 
-###
-
-# Interview Stages CRUD (nested under a job application)
-
-### Create an interview stage under job application 1
+### Create an interview stage under application 1
 POST {{JobTracker.Api_HostAddress}}/job-applications/1/interview-stages/
+Cookie: session={{session}}
 Content-Type: application/json
 
 {
@@ -85,10 +89,9 @@ Content-Type: application/json
   "notes": null
 }
 
-###
-
-### Update interview stage 1 under job application 1
+### Update interview stage 1 under application 1
 PUT {{JobTracker.Api_HostAddress}}/job-applications/1/interview-stages/1
+Cookie: session={{session}}
 Content-Type: application/json
 
 {
@@ -98,30 +101,25 @@ Content-Type: application/json
   "notes": "Went well"
 }
 
-###
-
-### Delete interview stage 1 under job application 1
+### Delete interview stage 1 under application 1
 DELETE {{JobTracker.Api_HostAddress}}/job-applications/1/interview-stages/1
+Cookie: session={{session}}
 
-###
-
-### Mismatched parent: update job application 1's stage 1 using job application 2's id (expect 404)
+### Mismatched parent: stage 1 does not belong to application 2 (expect 404)
 PUT {{JobTracker.Api_HostAddress}}/job-applications/2/interview-stages/1
+Cookie: session={{session}}
 Content-Type: application/json
 
 {
-  "stageName": "HIJACKED",
+  "stageName": "Should not apply",
   "scheduledAt": null,
   "outcome": "Failed",
-  "notes": "should not apply"
+  "notes": null
 }
 
-###
-
-# Application Documents CRUD (nested under a job application)
-
-### Create a document under job application 1
+### Create a document under application 1
 POST {{JobTracker.Api_HostAddress}}/job-applications/1/documents/
+Cookie: session={{session}}
 Content-Type: application/json
 
 {
@@ -130,10 +128,9 @@ Content-Type: application/json
   "notes": null
 }
 
-###
-
-### Update document 1 under job application 1
+### Update document 1 under application 1
 PUT {{JobTracker.Api_HostAddress}}/job-applications/1/documents/1
+Cookie: session={{session}}
 Content-Type: application/json
 
 {
@@ -142,9 +139,23 @@ Content-Type: application/json
   "notes": "Updated"
 }
 
-###
-
-### Delete document 1 under job application 1
+### Delete document 1 under application 1
 DELETE {{JobTracker.Api_HostAddress}}/job-applications/1/documents/1
+Cookie: session={{session}}
 
-###
+### Admin counts (403 unless your user id is in Authorization:AdminUserIds)
+GET {{JobTracker.Api_HostAddress}}/admin/stats
+Cookie: session={{session}}
+
+### Keyword gap with invented texts only. Each send spends one of your 4 permits per 10 minutes and one Groq call.
+POST {{JobTracker.Api_HostAddress}}/ai/keyword-gap
+Cookie: session={{session}}
+Content-Type: application/json
+
+{
+  "jobDescription": "Seeking a .NET developer with REST API, SQL and Docker experience.",
+  "cvText": "Built REST APIs in C# and .NET with SQL Server."
+}
+
+### Database health (anonymous for now, no cookie needed)
+GET {{JobTracker.Api_HostAddress}}/health/db

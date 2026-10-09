@@ -1,4 +1,3 @@
-using JobTracker.Api.Ai;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Hosting;
@@ -10,9 +9,9 @@ using Microsoft.Extensions.Logging;
 
 namespace JobTracker.Api.Tests;
 
-// Program is internal (top-level statements), so a public type from the API
-// assembly marks the entry assembly instead.
-public sealed class ApiFactory : WebApplicationFactory<GroqOptions>
+// Program, the API's top-level-statements entry point, is accessible from this
+// project on .NET 10 (checked on SDK 10.0.401), so the factory uses it directly.
+public sealed class ApiFactory : WebApplicationFactory<Program>
 {
     public const string FakeConnectionString = "Host=127.0.0.1;Port=1;Database=tests;Username=tests;Password=tests";
     public const string FakeGroqKey = "test-key-not-real";

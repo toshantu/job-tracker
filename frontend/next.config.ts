@@ -19,7 +19,7 @@ function resolveBackendOrigin(): string {
     throw new Error(`BACKEND_ORIGIN must be an http or https URL, got: ${raw}`);
   }
 
-  return url.origin; //also drops any trailing slash
+  return url.origin; // also drops any trailing slash
 }
 
 const backendOrigin = resolveBackendOrigin();

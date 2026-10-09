@@ -1,0 +1,8 @@
+# backend/ is the Docker build context (the Dockerfile copies *.csproj from its root).
+# Keep local build output and editor files out of it.
+**/bin
+**/obj
+.vs
+.vscode
+**/*.user
+*.http
