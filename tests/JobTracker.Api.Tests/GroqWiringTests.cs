@@ -33,12 +33,8 @@ public class GroqWiringTests
     [InlineData("Ai:Groq:TimeoutSeconds", "999", "Ai:Groq:TimeoutSeconds must be between 5 and 60")]
     public void Invalid_groq_setting_stops_the_host_from_starting(string key, string value, string expectedMessage)
     {
-        using var factory = new ApiFactory(key, value);
+        var validation = StartupFailure.Capture(key, value);
 
-        var exception = Record.Exception(() => { _ = factory.Services; });
-
-        var validation = FindOptionsValidationException(exception);
-        Assert.NotNull(validation);
         Assert.Contains(expectedMessage, validation.Message);
     }
 
@@ -74,27 +70,5 @@ public class GroqWiringTests
         Assert.DoesNotContain(ApiFactory.FakeGroqKey, call.Uri.ToString());
         Assert.Equal("Bearer", call.AuthorizationScheme);
         Assert.Equal(ApiFactory.FakeGroqKey, call.AuthorizationParameter);
-    }
-
-    private static OptionsValidationException? FindOptionsValidationException(Exception? exception)
-    {
-        if (exception is null)
-        {
-            return null;
-        }
-
-        if (exception is OptionsValidationException validation)
-        {
-            return validation;
-        }
-
-        if (exception is AggregateException aggregate)
-        {
-            return aggregate.InnerExceptions
-                .Select(FindOptionsValidationException)
-                .FirstOrDefault(found => found is not null);
-        }
-
-        return FindOptionsValidationException(exception.InnerException);
     }
 }
