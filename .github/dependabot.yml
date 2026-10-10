@@ -1,0 +1,108 @@
+# Dependabot opens pull requests for outdated dependencies once a month, grouped so that each pull request is one decision.
+# CI runs on every one of them and nothing merges by itself.
+# Security updates are separate: they open at once and ignore the schedule and the cooldown.
+version: 2
+
+updates:
+  # The actions used in .github/workflows. Dependabot changes the commit SHA and the version comment together.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 3
+    groups:
+      actions:
+        patterns:
+          - "*"
+
+  # Frontend packages: frontend/package.json and frontend/package-lock.json.
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "monthly"
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 3
+    groups:
+      # next and eslint-config-next are pinned to the same exact version, so they must move together.
+      next-stack:
+        patterns:
+          - "next"
+          - "eslint-config-next"
+          - "@next/*"
+      react:
+        patterns:
+          - "react"
+          - "react-dom"
+          - "@types/react"
+          - "@types/react-dom"
+      # Everything else: minor and patch updates in one pull request. Major updates arrive one by one.
+      npm-minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Backend packages. EF Core, ASP.NET Core and Npgsql's EF Core provider must stay on one version, so they form one group.
+  - package-ecosystem: "nuget"
+    directory: "/backend"
+    schedule:
+      interval: "monthly"
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 3
+    groups:
+      dotnet-platform:
+        patterns:
+          - "Microsoft.AspNetCore.*"
+          - "Microsoft.EntityFrameworkCore*"
+          - "Npgsql.EntityFrameworkCore.PostgreSQL"
+        update-types:
+          - "minor"
+          - "patch"
+      nuget-minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      # A new major version of these packages means a new .NET version. That upgrade is made on purpose, in its own unit.
+      - dependency-name: "Microsoft.AspNetCore.*"
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "Microsoft.EntityFrameworkCore*"
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "Npgsql.EntityFrameworkCore.PostgreSQL"
+        update-types:
+          - "version-update:semver-major"
+
+  # Test project packages. The ASP.NET Core test host follows the same rule as the backend.
+  - package-ecosystem: "nuget"
+    directory: "/tests/JobTracker.Api.Tests"
+    schedule:
+      interval: "monthly"
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 3
+    groups:
+      test-dotnet-platform:
+        patterns:
+          - "Microsoft.AspNetCore.*"
+        update-types:
+          - "minor"
+          - "patch"
+      test-nuget-minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      - dependency-name: "Microsoft.AspNetCore.*"
+        update-types:
+          - "version-update:semver-major"

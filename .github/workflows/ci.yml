@@ -1,0 +1,110 @@
+# Continuous integration: build and test everything on every pull request and on every push to main.
+# GitHub Actions only checks the code. Vercel and Render do the deploying, each from main.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# The token every job receives can only read this repository. Nothing here needs more.
+permissions:
+  contents: read
+
+# A newer push to the same pull request cancels the older run. Runs on main are never cancelled.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  DOTNET_NOLOGO: "1"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  backend:
+    name: Backend
+    # Pinned instead of ubuntu-latest, so a change of runner image never arrives unannounced.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Show the .NET version
+        run: dotnet --version
+
+      - name: Restore
+        run: dotnet restore tests/JobTracker.Api.Tests/JobTracker.Api.Tests.csproj
+
+      - name: Build
+        run: dotnet build tests/JobTracker.Api.Tests/JobTracker.Api.Tests.csproj --configuration Release --no-restore
+
+      # The tests use a fake database, a stubbed Groq client and fake settings, so they need no secrets.
+      # JOBTRACKER_LIVE_GROQ is never set here, so the live Groq test stays skipped.
+      - name: Test
+        run: dotnet test tests/JobTracker.Api.Tests/JobTracker.Api.Tests.csproj --configuration Release --no-build
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    env:
+      # next.config.ts refuses to load without a valid http or https URL. The build only reads it, nothing connects to it.
+      BACKEND_ORIGIN: http://localhost:5073
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Show the Node.js and npm versions
+        run: node --version && npm --version
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      # The build type-checks the test files too, so it runs before the separate tsc step.
+      - name: Build
+        run: npm run build
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+  docker:
+    name: Docker image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Render builds backend/Dockerfile with backend/ as the build context. This builds the same image and throws it away.
+      - name: Build the backend image
+        run: docker build --tag job-tracker-api:ci backend
