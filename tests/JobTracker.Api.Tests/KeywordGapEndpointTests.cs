@@ -2,7 +2,6 @@ using System.Globalization;
 using System.Net;
 using System.Text;
 using System.Text.Json;
-using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace JobTracker.Api.Tests;
@@ -315,34 +314,8 @@ public class KeywordGapLimitsConfigTests
     [InlineData("Ai:KeywordGap:GlobalPermits", "4", "GlobalPermits must be greater than PerUserPermits")]
     public void Invalid_limits_stop_the_host_from_starting(string key, string value, string expectedMessage)
     {
-        using var factory = new ApiFactory(key, value);
+        var validation = StartupFailure.Capture(key, value);
 
-        var exception = Record.Exception(() => { _ = factory.Services; });
-
-        var validation = FindOptionsValidationException(exception);
-        Assert.NotNull(validation);
         Assert.Contains(expectedMessage, validation.Message);
-    }
-
-    private static OptionsValidationException? FindOptionsValidationException(Exception? exception)
-    {
-        if (exception is null)
-        {
-            return null;
-        }
-
-        if (exception is OptionsValidationException validation)
-        {
-            return validation;
-        }
-
-        if (exception is AggregateException aggregate)
-        {
-            return aggregate.InnerExceptions
-                .Select(FindOptionsValidationException)
-                .FirstOrDefault(found => found is not null);
-        }
-
-        return FindOptionsValidationException(exception.InnerException);
     }
 }
